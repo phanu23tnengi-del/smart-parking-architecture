@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smart Parking — Full Project Architecture</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --border: #334155;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+  .controls { display: flex; gap: 10px; }
+  .btn {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: #334155; }
+  .btn.active { background: #0284c7; border-color: #38bdf8; }
+
+  main {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 20px 24px 36px;
+  }
+  .canvas-wrap {
+    width: 100%;
+    overflow-x: auto;
+    background: #0b1120;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    padding: 12px;
+  }
+  svg {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Hover Focus Transitions */
+  .node-group, .edge-group { transition: opacity 0.2s ease; }
+  .node-group { cursor: pointer; }
+  .node-rect { transition: stroke-width 0.15s, filter 0.15s; }
+  .node-group:hover .node-rect { filter: brightness(1.18); stroke-width: 2.5px; }
+  .node-group.selected .node-rect { stroke: #c6f25f !important; stroke-width: 3px; }
+
+  svg.has-focus .node-group:not(.focused) { opacity: 0.22; }
+  svg.has-focus .edge-group:not(.focused) { opacity: 0.08; }
+  svg.has-focus .edge-group.focused .edge-path { stroke: #38bdf8; stroke-width: 2.8px; }
+  svg.has-focus .edge-group.focused .edge-label-bg { stroke: #38bdf8; fill: #0f172a; }
+  svg.has-focus .edge-group.focused .edge-label-text { fill: #f8fafc; font-weight: 600; }
+
+  svg.hide-labels .edge-label-group { opacity: 0; pointer-events: none; }
+  svg.hide-labels.has-focus .edge-group.focused .edge-label-group { opacity: 1; }
+
+  /* Summary Cards Grid */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+  }
+  .info-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .info-card:hover {
+    border-color: #38bdf8;
+    transform: translateY(-2px);
+  }
+  .card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .card-head h3 { margin: 0; font-size: 15px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .info-card ul { margin: 0; padding-left: 18px; color: #cbd5e1; font-size: 13.5px; line-height: 1.55; }
+  .card-link { margin-top: 10px; font-size: 12.5px; color: #38bdf8; font-weight: 600; }
+
+  /* Drawer */
+  #backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 30;
+  }
+  #drawer {
+    position: fixed;
+    top: 0;
+    right: -420px;
+    width: 400px;
+    max-width: 92vw;
+    height: 100vh;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    padding: 24px;
+    z-index: 40;
+    transition: right 0.25s ease;
+    overflow-y: auto;
+    box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+  }
+  #drawer.open { right: 0; }
+  #drawer-close {
+    float: right;
+    background: #334155;
+    border: none;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #drawer h2 { margin: 0 0 6px; font-size: 19px; color: #c6f25f; }
+  #drawer .sub { color: #cbd5e1; font-size: 13.5px; margin-bottom: 16px; line-height: 1.5; }
+  .sec-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin: 16px 0 6px; }
+  #drawer .tag {
+    display: inline-block;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 12.5px;
+    margin: 0 6px 6px 0;
+    color: #38bdf8;
+  }
+  #drawer ul { padding-left: 18px; line-height: 1.65; color: #e2e8f0; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="hdr-title"></h1>
+    <p id="hdr-sub"></p>
+  </div>
+  <div class="controls">
+    <button class="btn" id="btn-toggle-labels">ซ่อนป้ายชื่อบนเส้น</button>
+  </div>
+</header>
+
+<main>
+  <div class="canvas-wrap">
+    <svg id="diagram" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div class="cards-grid" id="cards-grid"></div>
+</main>
+
+<div id="backdrop"></div>
+<aside id="drawer">
+  <button id="drawer-close">✕ ปิด</button>
+  <h2 id="d-title"></h2>
+  <div class="sec-label">หน้าที่การทำงานหลัก</div>
+  <div class="sub" id="d-sub"></div>
+  <div class="sec-label">ไฟล์โค้ดที่เกี่ยวข้อง</div>
+  <div id="d-files"></div>
+  <div class="sec-label">ฟังก์ชันและการทำงานสำคัญ</div>
+  <ul id="d-bullets"></ul>
+</aside>
+
+<script>
+const DATA = {"title": "Smart Parking — Full Project Architecture", "subtitle": "เอาเมาส์ชี้ที่กล่องเพื่อโฟกัสเฉพาะเส้นเชื่อม หรือคลิกที่กล่องเพื่อดูรายละเอียดโค้ดและฟังก์ชัน", "output": ".archify/architecture-parking-connections-20261121-144224/parking-connections.html", "canvas": {"width": 1460, "height": 640}, "groups": [{"id": "grp_fe", "label": "Web Frontend & Auth (Streamlit)", "x": 245, "y": 25, "w": 275, "h": 405, "color": "#38bdf8"}, {"id": "grp_core", "label": "Core Detection Engine (main.py Process)", "x": 555, "y": 25, "w": 575, "h": 405, "color": "#a855f7"}, {"id": "grp_store", "label": "Local Storage & Config", "x": 395, "y": 465, "w": 735, "h": 140, "color": "#f59e0b"}, {"id": "grp_ext", "label": "External Services", "x": 1165, "y": 25, "w": 265, "h": 405, "color": "#10b981"}], "nodes": [{"id": "operator", "title": "Operator / Admin", "subtitle": "Web Browser", "x": 20, "y": 190, "w": 190, "h": 80, "color": "#64748b", "details": {"role": "ผู้ใช้งานและผู้ดูแลระบบ เปิดดูภาพสด ตรวจสอบประวัติ และตั้งค่าพื้นที่ห้ามจอด", "files": ["Browser (Local / Cloudflare Tunnel)"], "bullets": ["ดูภาพสด Live View และสถานะระบบแบบเรียลไทม์", "วาดและลากปรับพิกัดมุมพื้นที่ห้ามจอด (ROI Setup)", "ปรับค่าตั้งค่าแจ้งเตือนและล้างภาพหลักฐาน (Admin เท่านั้น)"]}}, {"id": "roicanvas", "title": "Interactive ROI Canvas", "subtitle": "roi_canvas/index.html", "x": 275, "y": 60, "w": 215, "h": 76, "color": "#38bdf8", "details": {"role": "Custom Streamlit Component สำหรับวาดและลากปรับจุดพื้นที่ห้ามจอด", "files": ["roi_canvas/index.html", "set_roi.py"], "bullets": ["คลิกซ้ายบน HTML5 Canvas เพื่อวางจุดมุมพื้นที่ห้ามจอด", "ลากจุดเพื่อปรับพิกัด (x, y) ตามความละเอียดภาพจริงของกล้อง", "ส่งค่าพิกัดกลับไปยัง dashboard.py เพื่อบันทึกลง roi_config.json"]}}, {"id": "dashboard", "title": "Streamlit Dashboard", "subtitle": "dashboard.py", "x": 275, "y": 190, "w": 215, "h": 84, "color": "#0284c7", "details": {"role": "หน้าเว็บควบคุมหลัก แสดงผลสถานะ ประวัติการแจ้งเตือน และฟอร์มตั้งค่าระบบ", "files": ["dashboard.py", "assets/dashboard.css"], "bullets": ["page_dashboard() — แสดงภาพสด MJPEG/Snapshot + การ์ดสถานะ + ตารางประวัติ", "page_roi_setup() — โหลดภาพจากกล้องเพื่อกำหนดจุด ROI", "page_settings() — ส่งค่าตั้งค่าใหม่ไปยัง main.py ผ่าน POST /settings", "runtime_status_bar() — รีเฟรชสถานะทุก 2 วินาทีผ่าน GET /status"]}}, {"id": "auth", "title": "Authentication & RBAC", "subtitle": "auth.py, add_user.py", "x": 275, "y": 325, "w": 215, "h": 76, "color": "#0ea5e9", "details": {"role": "ระบบยืนยันตัวตน แบ่งสิทธิ์ Admin / Viewer และป้องกันการเดารหัสผ่าน", "files": ["auth.py", "add_user.py", "users.json"], "bullets": ["hash_password() / verify_password() — เข้ารหัสทางเดียว PBKDF2-SHA256 (310,000 รอบ)", "authenticate() — ล็อกบัญชีชั่วคราว 5 นาทีเมื่อใส่รหัสผิดครบ 5 ครั้ง", "get_role() — แยกสิทธิ์ admin (ตั้งค่า/แก้ ROI ได้) และ viewer (ดูอย่างเดียว)"]}}, {"id": "stream", "title": "MJPEG & Control API", "subtitle": "mjpeg_server.py, frame_stream.py", "x": 585, "y": 115, "w": 235, "h": 84, "color": "#8b5cf6", "details": {"role": "Flask Server พอร์ต 5000 ให้บริการสตรีมภาพสดและ API ควบคุมการทำงาน", "files": ["mjpeg_server.py", "frame_stream.py"], "bullets": ["LatestFrameStore — เข้ารหัส JPEG ใน Background Thread ไม่บล็อกลูป YOLO", "GET /video_feed — สตรีมภาพ MJPEG ต่อเนื่องให้หน้า Dashboard", "GET /snapshot.jpg — ภาพนิ่งล่าสุดสำหรับผู้ชมจากภายนอก", "GET /status & POST /settings — รายงานสถานะและรับค่าตั้งค่าใหม่"]}}, {"id": "state", "title": "Runtime State & Config", "subtitle": "runtime_state.py, config.py", "x": 585, "y": 280, "w": 235, "h": 84, "color": "#7c3aed", "details": {"role": "ศูนย์กลางค่าตั้งค่าเริ่มต้น Token ความลับ และสถานะการทำงานแบบ Thread-safe", "files": ["runtime_state.py", "config.py", ".env"], "bullets": ["RuntimeState.apply_to_config() — โหลดค่าจาก runtime_settings.json มาอัปเดตให้ main.py ทันที", "RuntimeState.update_status() — เก็บสถานะกล้อง, YOLO, FPS, รถใน ROI และผลส่ง LINE ล่าสุด", "config.py — โหลดค่าจาก .env (IMGBB_API_KEY, CHANNEL_ACCESS_TOKEN, USER_ID)"]}}, {"id": "grabber", "title": "HLS Frame Grabber", "subtitle": "hls_grabber.py", "x": 880, "y": 60, "w": 225, "h": 76, "color": "#9333ea", "details": {"role": "Thread แยกสำหรับดึงเฟรมภาพล่าสุดจากกล้อง HLS อย่างต่อเนื่อง ลดอาการภาพกระตุก", "files": ["hls_grabber.py"], "bullets": ["HlsFrameGrabber._grab_loop() — อ่านเฟรมจาก cv2.VideoCapture ตาม FPS จริงของสตรีม", "read_latest() — ส่งเฉพาะเฟรมใหม่ล่าสุดให้ main.py (ทิ้งเฟรมเก่าที่ประมวลผลไม่ทัน)", "_mark_down() — เชื่อมต่อใหม่อัตโนมัติเมื่อสตรีมขาด"]}}, {"id": "detector", "title": "YOLO Detector & ROI", "subtitle": "main.py, detector.py, roi.py", "x": 880, "y": 190, "w": 225, "h": 84, "color": "#a855f7", "details": {"role": "ตรวจจับรถมอเตอร์ไซค์ ติดตาม Track ID และเช็กว่าจุดล้ออยู่ในเขตห้ามจอดหรือไม่", "files": ["main.py", "detector.py", "roi.py"], "bullets": ["load_yolo_model() / track_with_fallback() — รันบน CUDA และสลับไป CPU อัตโนมัติเมื่อ GPU Error", "get_wheel_point() — หาจุดกึ่งกลางขอบล่างของ Bounding Box (ตำแหน่งล้อ)", "process_box() — เช็ก cv2.pointPolygonTest() ว่าล้ออยู่ในพื้นที่ ROI หรือไม่"]}}, {"id": "monitor", "title": "Parking Timer & Alert", "subtitle": "parking_monitor.py, notifier.py", "x": 880, "y": 325, "w": 225, "h": 84, "color": "#c026d3", "details": {"role": "จับเวลาการจอดสะสมของรถแต่ละคัน และส่งแจ้งเตือนแบบ Non-blocking ผ่าน ThreadPool", "files": ["parking_monitor.py", "notifier.py", "image_tools.py"], "bullets": ["handle_car_in_zone() — นับเวลาจอด เมื่อครบ ALERT_DURATION จะส่งงานเข้า _ALERT_EXECUTOR (2 workers)", "_process_alert_task() — สร้างภาพหลักฐาน อัปโหลด imgbb ส่ง LINE และ Retry สูงสุด 3 ครั้งหากล้มเหลว", "cleanup_stale_timers() — รีเซ็ตเวลาเมื่อรถออกจากโซนเกิน GRACE_PERIOD (3 วินาที)"]}}, {"id": "logdb", "title": "SQLite Violation Log", "subtitle": "database.py (parking_log.db)", "x": 425, "y": 500, "w": 210, "h": 76, "color": "#d97706", "details": {"role": "ฐานข้อมูล SQLite โหมด WAL เก็บประวัติการแจ้งเตือนทั้งหมด", "files": ["database.py", "parking_log.db"], "bullets": ["init_db() — สร้างตาราง violations และเปิด PRAGMA journal_mode = WAL", "log_violation() — บันทึกเวลา, track_id, เวลาจอด, path รูป, URL และสถานะ LINE", "cleanup_old_violations() — ลบประวัติและภาพเก่าที่เกิน 24 ชั่วโมงอัตโนมัติ"]}}, {"id": "cfgfiles", "title": "JSON Config Files", "subtitle": "roi_config.json, runtime_settings.json", "x": 665, "y": 500, "w": 225, "h": 76, "color": "#f59e0b", "details": {"role": "ไฟล์เก็บพิกัดมุม ROI และค่าตั้งค่าที่ปรับผ่านหน้าเว็บแบบถาวร", "files": ["roi_config.json", "runtime_settings.json"], "bullets": ["roi_config.json — main.py ตรวจสอบ mtime ทุกเฟรมเพื่อโหลดพิกัด ROI ใหม่ทันทีที่กดบันทึก", "runtime_settings.json — เก็บค่า ALERT_DURATION, YOLO_CONF, FPS, JPEG Quality"]}}, {"id": "evidence", "title": "Evidence Image Store", "subtitle": "DATA_Imgbb/*.jpg", "x": 920, "y": 500, "w": 195, "h": 76, "color": "#ea580c", "details": {"role": "โฟลเดอร์เก็บไฟล์ภาพหลักฐานที่วาดกรอบสีแดงเฉพาะรถคันที่ทำผิด", "files": ["DATA_Imgbb/", "image_tools.py"], "bullets": ["build_evidence_image() — วาดกรอบและเวลาจอดลงบนภาพสะอาด (clean_img)", "save_evidence_image() — ย่อความกว้างไม่เกิน 1280px และบีบอัด JPEG เพื่ออัปโหลดเร็ว"]}}, {"id": "camera", "title": "HLS Camera Stream", "subtitle": "config.HLS_URL (.m3u8)", "x": 1190, "y": 60, "w": 215, "h": 76, "color": "#059669", "details": {"role": "แหล่งภาพวิดีโอสดจากกล้องวงจรปิดผ่านโปรโตคอล HLS", "files": ["config.py (HLS_URL)"], "bullets": ["ส่งสตรีมวิดีโออย่างต่อเนื่องให้ HlsFrameGrabber", "รองรับการดึงภาพนิ่ง 1 เฟรมในหน้า ROI Setup กรณี main.py ยังไม่เปิด"]}}, {"id": "imgbb", "title": "imgbb Cloud API", "subtitle": "api.imgbb.com/1/upload", "x": 1190, "y": 215, "w": 215, "h": 76, "color": "#10b981", "details": {"role": "บริการฝากไฟล์รูปภาพชั่วคราวเพื่อให้ได้ Public HTTPS URL สำหรับส่งเข้า LINE", "files": ["notifier.py (upload_image_to_web)"], "bullets": ["อัปโหลดรูปหลักฐานแบบ Base64 พร้อมตั้งเวลาหมดอายุอัตโนมัติตาม HISTORY_RETENTION_HOURS (24 ชม.)"]}}, {"id": "line", "title": "LINE Messaging API", "subtitle": "api.line.me/v2/bot/message/push", "x": 1190, "y": 330, "w": 215, "h": 76, "color": "#22c55e", "details": {"role": "ช่องทางส่งข้อความแจ้งเตือนและรูปภาพหลักฐานไปยังผู้ดูแลระบบ", "files": ["notifier.py (send_line_message)"], "bullets": ["ส่งข้อความระบุประเภทพาหนะ, Track ID, เวลาจอดสะสม และแนบภาพหลักฐานทันที"]}}], "edges": [{"from": "operator", "to": "dashboard", "fromSide": "right", "toSide": "left", "label": "HTTP UI"}, {"from": "roicanvas", "to": "dashboard", "fromSide": "bottom", "toSide": "top", "label": "พิกัด ROI"}, {"from": "auth", "to": "dashboard", "fromSide": "top", "toSide": "bottom", "label": "ตรวจสิทธิ์ RBAC"}, {"from": "dashboard", "to": "stream", "fromSide": "right", "toSide": "left", "label": "MJPEG / API :5000"}, {"from": "dashboard", "to": "logdb", "fromSide": "right", "toSide": "top", "label": "SELECT ประวัติ"}, {"from": "stream", "to": "state", "fromSide": "bottom", "toSide": "top", "label": "ซิงก์ตั้งค่า"}, {"from": "state", "to": "cfgfiles", "fromSide": "bottom", "toSide": "top", "label": "โหลด/เซฟ JSON"}, {"from": "camera", "to": "grabber", "fromSide": "left", "toSide": "right", "label": "HLS .m3u8"}, {"from": "grabber", "to": "detector", "fromSide": "bottom", "toSide": "top", "label": "เฟรมล่าสุด"}, {"from": "detector", "to": "stream", "fromSide": "left", "toSide": "right", "label": "ภาพตีกรอบแล้ว"}, {"from": "detector", "to": "monitor", "fromSide": "bottom", "toSide": "top", "label": "รถใน ROI"}, {"from": "monitor", "to": "imgbb", "fromSide": "right", "toSide": "left", "label": "อัปโหลด JPEG"}, {"from": "monitor", "to": "line", "fromSide": "right", "toSide": "left", "label": "ส่งแจ้งเตือน"}, {"from": "monitor", "to": "evidence", "fromSide": "bottom", "toSide": "top", "label": "เซฟ .jpg"}, {"from": "monitor", "to": "logdb", "fromSide": "left", "toSide": "top", "label": "INSERT Log"}], "cards": [{"dot": "#38bdf8", "title": "1. Video & AI Pipeline", "targetNode": "detector", "items": ["HlsFrameGrabber ดึงเฟรมล่าสุดแยก Thread เพื่อไม่ให้ YOLO ค้างรอไฟล์ .ts", "YOLO ตรวจจับมอเตอร์ไซค์บน CUDA (สลับไป CPU อัตโนมัติถ้า GPU Error) และเช็กจุดล้อใน ROI"]}, {"dot": "#fb7185", "title": "2. Timer & Async Alert", "targetNode": "monitor", "items": ["parking_monitor.py นับเวลาจอดแช่ (ค่าเริ่มต้น 60 วินาที, ลืมรถเมื่อออกเกิน 3 วินาที)", "ส่งงานเซฟรูป อัปโหลด imgbb และยิง LINE ผ่าน ThreadPoolExecutor (2 workers) พร้อมระบบ Retry"]}, {"dot": "#34d399", "title": "3. Dashboard & Live Stream", "targetNode": "dashboard", "items": ["main.py เปิด Flask พอร์ต 5000 ส่งภาพ MJPEG และ API ให้ dashboard.py ดึงไปแสดงผล", "รองรับการวาดพิกัด ROI ผ่าน HTML5 Canvas และระบบล็อกอินแยกสิทธิ์ Admin / Viewer"]}, {"dot": "#f59e0b", "title": "4. Database & Auto Cleanup", "targetNode": "logdb", "items": ["บันทึกประวัติลง SQLite (parking_log.db โหมด WAL) คู่กับไฟล์ภาพใน DATA_Imgbb/", "ระบบล้างประวัติและไฟล์ภาพหลักฐานที่เก่าเกิน 24 ชั่วโมงออกโดยอัตโนมัติ"]}]};
+const svg = document.getElementById("diagram");
+const NS = "http://www.w3.org/2000/svg";
+
+document.getElementById("hdr-title").textContent = DATA.title;
+document.getElementById("hdr-sub").textContent = DATA.subtitle || "";
+
+const W = DATA.canvas.width;
+const H = DATA.canvas.height;
+svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+svg.setAttribute("width", W);
+svg.setAttribute("height", H);
+
+function el(tag, attrs = {}, parent = null) {
+  const node = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+const defs = el("defs", {}, svg);
+const marker = el("marker", {
+  id: "arrow", viewBox: "0 0 10 10", refX: "8", refY: "5",
+  markerWidth: "6", markerHeight: "6", orient: "auto-start-reverse"
+}, defs);
+el("path", { d: "M 0 1.5 L 10 5 L 0 8.5 z", fill: "#64748b" }, marker);
+
+const markerFocus = el("marker", {
+  id: "arrow-focus", viewBox: "0 0 10 10", refX: "8", refY: "5",
+  markerWidth: "6", markerHeight: "6", orient: "auto-start-reverse"
+}, defs);
+el("path", { d: "M 0 1.5 L 10 5 L 0 8.5 z", fill: "#38bdf8" }, markerFocus);
+
+// 1. Groups
+const gGroups = el("g", {}, svg);
+(DATA.groups || []).forEach(g => {
+  el("rect", {
+    x: g.x, y: g.y, width: g.w, height: g.h, rx: 14,
+    fill: g.color, "fill-opacity": "0.05",
+    stroke: g.color, "stroke-opacity": "0.35", "stroke-dasharray": "6 4", "stroke-width": 1.5
+  }, gGroups);
+  const t = el("text", {
+    x: g.x + 14, y: g.y + 22, fill: g.color, "font-size": 12, "font-weight": "700", opacity: 0.9
+  }, gGroups);
+  t.textContent = g.label;
+});
+
+const nodeMap = Object.fromEntries(DATA.nodes.map(n => [n.id, n]));
+
+function getAnchor(node, side) {
+  if (side === "left") return { x: node.x, y: node.y + node.h / 2, dx: -1, dy: 0 };
+  if (side === "right") return { x: node.x + node.w, y: node.y + node.h / 2, dx: 1, dy: 0 };
+  if (side === "top") return { x: node.x + node.w / 2, y: node.y, dx: 0, dy: -1 };
+  return { x: node.x + node.w / 2, y: node.y + node.h, dx: 0, dy: 1 };
+}
+
+// 2. Edges
+const gEdges = el("g", {}, svg);
+const edgeElements = [];
+
+(DATA.edges || []).forEach(e => {
+  const n1 = nodeMap[e.from];
+  const n2 = nodeMap[e.to];
+  if (!n1 || !n2) return;
+
+  const p1 = getAnchor(n1, e.fromSide || "right");
+  const p2 = getAnchor(n2, e.toSide || "left");
+
+  const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const curve = Math.min(110, Math.max(40, dist * 0.35));
+
+  const c1x = p1.x + p1.dx * curve;
+  const c1y = p1.y + p1.dy * curve;
+  const c2x = p2.x + p2.dx * curve;
+  const c2y = p2.y + p2.dy * curve;
+
+  const eg = el("g", { class: "edge-group", "data-from": e.from, "data-to": e.to }, gEdges);
+  const path = el("path", {
+    class: "edge-path",
+    d: `M ${p1.x} ${p1.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`,
+    fill: "none", stroke: "#475569", "stroke-width": 1.8, "marker-end": "url(#arrow)"
+  }, eg);
+
+  if (e.label) {
+    const mx = 0.125*p1.x + 0.375*c1x + 0.375*c2x + 0.125*p2.x;
+    const my = 0.125*p1.y + 0.375*c1y + 0.375*c2y + 0.125*p2.y;
+    const lg = el("g", { class: "edge-label-group" }, eg);
+    const padX = 8, textW = e.label.length * 6.5 + padX * 2;
+    el("rect", {
+      class: "edge-label-bg",
+      x: mx - textW / 2, y: my - 10, width: textW, height: 20, rx: 10,
+      fill: "#0f172a", stroke: "#334155", "stroke-width": 1
+    }, lg);
+    const lbl = el("text", {
+      class: "edge-label-text",
+      x: mx, y: my + 4, "text-anchor": "middle", fill: "#94a3b8", "font-size": 11
+    }, lg);
+    lbl.textContent = e.label;
+  }
+  edgeElements.push({ el: eg, path, from: e.from, to: e.to });
+});
+
+// 3. Nodes
+const gNodes = el("g", {}, svg);
+const nodeElements = {};
+
+DATA.nodes.forEach(n => {
+  const ng = el("g", { class: "node-group", "data-id": n.id }, gNodes);
+  el("rect", {
+    class: "node-rect",
+    x: n.x, y: n.y, width: n.w, height: n.h, rx: 10,
+    fill: "#1e293b", stroke: n.color || "#64748b", "stroke-width": 1.8
+  }, ng);
+
+  el("rect", {
+    x: n.x, y: n.y + 10, width: 4, height: n.h - 20, rx: 2,
+    fill: n.color || "#38bdf8"
+  }, ng);
+
+  const t1 = el("text", {
+    x: n.x + 16, y: n.y + 32, fill: "#f8fafc", "font-size": 14, "font-weight": "700"
+  }, ng);
+  t1.textContent = n.title;
+
+  if (n.subtitle) {
+    const t2 = el("text", {
+      x: n.x + 16, y: n.y + 52, fill: "#94a3b8", "font-size": 11.5
+    }, ng);
+    t2.textContent = n.subtitle;
+  }
+
+  ng.addEventListener("mouseenter", () => setFocus(n.id));
+  ng.addEventListener("mouseleave", () => clearFocus());
+  ng.addEventListener("click", () => openDrawer(n));
+  nodeElements[n.id] = ng;
+});
+
+function setFocus(id) {
+  svg.classList.add("has-focus");
+  const connected = new Set([id]);
+  edgeElements.forEach(item => {
+    if (item.from === id || item.to === id) {
+      item.el.classList.add("focused");
+      item.path.setAttribute("marker-end", "url(#arrow-focus)");
+      connected.add(item.from);
+      connected.add(item.to);
+    } else {
+      item.el.classList.remove("focused");
+    }
+  });
+  Object.entries(nodeElements).forEach(([nid, nel]) => {
+    nel.classList.toggle("focused", connected.has(nid));
+  });
+}
+
+function clearFocus() {
+  svg.classList.remove("has-focus");
+  edgeElements.forEach(item => {
+    item.el.classList.remove("focused");
+    item.path.setAttribute("marker-end", "url(#arrow)");
+  });
+  Object.values(nodeElements).forEach(nel => nel.classList.remove("focused"));
+}
+
+// 4. Summary Cards
+const cardsGrid = document.getElementById("cards-grid");
+(DATA.cards || []).forEach(c => {
+  const card = document.createElement("div");
+  card.className = "info-card";
+  const head = document.createElement("div");
+  head.className = "card-head";
+  const dot = document.createElement("span");
+  dot.className = "dot";
+  dot.style.background = c.dot || "#38bdf8";
+  const h3 = document.createElement("h3");
+  h3.textContent = c.title;
+  head.append(dot, h3);
+
+  const ul = document.createElement("ul");
+  (c.items || []).forEach(txt => {
+    const li = document.createElement("li");
+    li.textContent = txt;
+    ul.appendChild(li);
+  });
+
+  card.append(head, ul);
+  if (c.targetNode && nodeMap[c.targetNode]) {
+    const link = document.createElement("div");
+    link.className = "card-link";
+    link.textContent = "คลิกเพื่อดูส่วนทำงานที่เกี่ยวข้อง →";
+    card.appendChild(link);
+    card.addEventListener("click", () => openDrawer(nodeMap[c.targetNode]));
+  }
+  cardsGrid.appendChild(card);
+});
+
+// Toggle Labels button
+const btnLabels = document.getElementById("btn-toggle-labels");
+btnLabels.addEventListener("click", () => {
+  const hidden = svg.classList.toggle("hide-labels");
+  btnLabels.classList.toggle("active", hidden);
+  btnLabels.textContent = hidden ? "แสดงป้ายชื่อบนเส้นทั้งหมด" : "ซ่อนป้ายชื่อบนเส้น";
+});
+
+// Drawer
+const drawer = document.getElementById("drawer");
+const backdrop = document.getElementById("backdrop");
+function closeDrawer() {
+  drawer.classList.remove("open");
+  backdrop.style.display = "none";
+  Object.values(nodeElements).forEach(nel => nel.classList.remove("selected"));
+}
+document.getElementById("drawer-close").onclick = closeDrawer;
+backdrop.onclick = closeDrawer;
+window.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+function openDrawer(n) {
+  Object.values(nodeElements).forEach(nel => nel.classList.remove("selected"));
+  if (nodeElements[n.id]) nodeElements[n.id].classList.add("selected");
+
+  document.getElementById("d-title").textContent = n.title;
+  document.getElementById("d-sub").textContent = n.details?.role || n.subtitle || "";
+  const filesDiv = document.getElementById("d-files");
+  filesDiv.innerHTML = "";
+  (n.details?.files || []).forEach(f => {
+    const s = document.createElement("span");
+    s.className = "tag";
+    s.textContent = f;
+    filesDiv.appendChild(s);
+  });
+  const ul = document.getElementById("d-bullets");
+  ul.innerHTML = "";
+  (n.details?.bullets || []).forEach(b => {
+    const li = document.createElement("li");
+    li.textContent = b;
+    ul.appendChild(li);
+  });
+  backdrop.style.display = "block";
+  drawer.classList.add("open");
+}
+</script>
+</body>
+</html>
